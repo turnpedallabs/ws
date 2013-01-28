@@ -1,159 +1,98 @@
-[![Build Status](https://secure.travis-ci.org/einaros/ws.png)](http://travis-ci.org/einaros/ws)
+# ws; forked.
+This project is a fork of the ws WebSocket module built for NodeJS. This for adds support for TLS/SSL communications between a ws server and another WebSocket client. 
 
-# ws: a node.js websocket library #
+Usage
+---
+Refer to the [official ws documentation](https://github.com/einaros/ws) for detailed usage information. 
 
-`ws` is a simple to use websocket implementation, up-to-date against RFC-6455, and [probably the fastest WebSocket library for node.js](http://hobbycoding.posterous.com/the-fastest-websocket-module-for-nodejs).
+Additions
+---
+To support encryped SSL/TLS connections, instantiate your server as follows:
 
-Passes the quite extensive Autobahn test suite. See http://einaros.github.com/ws for the full reports.
+	var WebSocketServer = require('ws').Server
+	  , wss = new WebSocketServer( { 
+		    port: port, 
+		    key: 'server.key', 
+		    cert: 'server.crt',
+		    ca: 'ca.crt',
+		    password: 'password'
+		  }
+	  );
 
-Comes with a command line utility, `wscat`, which can either act as a server (--listen), or client (--connect); Use it to debug simple websocket services.
+If you don't specify a key, or cert WS will assume you want a standard (unsecure) connection. 
 
-## Protocol support ##
+Generating Server Certs
+---
+There is a wealth of knowledge on the googles regarding generating self signed certificates. For the lazy though, I assume you have openssl installed, run the following commands: 
 
-* **Hixie draft 76** (Old and deprecated, but still in use by Safari and Opera. Added to ws version 0.4.2, but server only. Can be disabled by setting the `disableHixie` option to true.)
-* **HyBi drafts 07-12** (Use the option `protocolVersion: 8`, or argument `-p 8` for wscat)
-* **HyBi drafts 13-17** (Current default, alternatively option `protocolVersion: 13`, or argument `-p 13` for wscat)
+Create your CA root certificate:
 
-_See the echo.websocket.org example below for how to use the `protocolVersion` option._
+	$> openssl genrsa -des3 -out ca.key 1024
+	$> openssl req -new -key ca.key -out ca.csr
+	$> openssl x509 -req -days 365 -in ca.csr -out ca.crt -signkey ca.key
 
-## Usage ##
+Create your self signed server certificate: 
 
-### Installing ###
+	$> openssl genrsa -des3 -out server.key 1024
+	$> openssl req -new -key server.key -out server.csr
+	$> openssl x509 -req -in server.csr -out server.crt -CA ca.crt -CAkey ca.key -CAcreateserial -days 365
 
-`npm install ws`
+	
+Veryifying Your Server
+---
+OpenSSL comes with some cool tools. One of those tools is the s_client utility. Use this to verify that your server is accepting connections and using its server certificate. From the command line run the following command:
 
-### Sending and receiving text data ###
+	$> openssl s_client -connect localhost:3001 
+	
+This should produce output like this:
 
-```js
-var WebSocket = require('ws');
-var ws = new WebSocket('ws://www.host.com/path');
-ws.on('open', function() {
-    ws.send('something');
-});
-ws.on('message', function(data, flags) {
-    // flags.binary will be set if a binary data is received
-    // flags.masked will be set if the data was masked
-});
-```
-
-### Sending binary data ###
-
-```js
-var WebSocket = require('ws');
-var ws = new WebSocket('ws://www.host.com/path');
-ws.on('open', function() {
-    var array = new Float32Array(5);
-    for (var i = 0; i < array.length; ++i) array[i] = i / 2;
-    ws.send(array, {binary: true, mask: true});
-});
-```
-
-Setting `mask`, as done for the send options above, will cause the data to be masked according to the websocket protocol. The same option applies for text data.
-
-### Server example ###
-
-```js
-var WebSocketServer = require('ws').Server
-  , wss = new WebSocketServer({port: 8080});
-wss.on('connection', function(ws) {
-    ws.on('message', function(message) {
-        console.log('received: %s', message);
-    });
-    ws.send('something');
-});
-```
-
-### Error handling best practices ###
-
-```js
-// If the WebSocket is closed before the following send is attempted
-ws.send('something');
-
-// Errors (both immediate and async write errors) can be detected in an optional callback.
-// The callback is also the only way of being notified that data has actually been sent.
-ws.send('something', function(error) {
-    // if error is null, the send has been completed,
-    // otherwise the error object will indicate what failed.
-});
-
-// Immediate errors can also be handled with try/catch-blocks, but **note**
-// that since sends are inherently asynchronous, socket write failures will *not*
-// be captured when this technique is used.
-try {
-    ws.send('something');
-}
-catch (e) {
-    // handle error
-}
-```
-
-### echo.websocket.org demo ###
-
-```js
-var WebSocket = require('ws');
-var ws = new WebSocket('ws://echo.websocket.org/', {protocolVersion: 8, origin: 'http://websocket.org'});
-ws.on('open', function() {
-    console.log('connected');
-    ws.send(Date.now().toString(), {mask: true});
-});
-ws.on('close', function() {
-    console.log('disconnected');
-});
-ws.on('message', function(data, flags) {
-    console.log('Roundtrip time: ' + (Date.now() - parseInt(data)) + 'ms', flags);
-    setTimeout(function() {
-        ws.send(Date.now().toString(), {mask: true});
-    }, 500);
-});
-```
-
-### wscat against echo.websocket.org ###
-
-    $ npm install -g ws
-    $ wscat -c ws://echo.websocket.org -p 8
-    connected (press CTRL+C to quit)
-    > hi there
-    < hi there
-    > are you a happy parrot?
-    < are you a happy parrot?
-
-### Other examples ###
-
-For a full example with a browser client communicating with a ws server, see the examples folder.
-
-Note that the usage together with Express 3.0 is quite different from Express 2.x. The difference is expressed in the two different serverstats-examples.
-
-Otherwise, see the test cases.
-
-### Running the tests ###
-
-`make test`
-
-## API Docs ##
-
-See the doc/ directory for Node.js-like docs for the ws classes.
-
-## License ##
-
-(The MIT License)
-
-Copyright (c) 2011 Einar Otto Stangvik &lt;einaros@gmail.com&gt;
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-'Software'), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+	CONNECTED(00000003)
+	depth=0 /C=AU/ST=Some-State/O=Internet Widgits Pty Ltd
+	verify error:num=18:self signed certificate
+	verify return:1
+	depth=0 /C=AU/ST=Some-State/O=Internet Widgits Pty Ltd
+	verify return:1
+	---
+	Certificate chain
+	 0 s:/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd
+	   i:/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd
+	---
+	Server certificate
+	-----BEGIN CERTIFICATE-----
+	MIICATCCAWoCCQCApxN9wxSEbzANBgkqhkiG9w0BAQUFADBFMQswCQYDVQQGEwJB
+	VTETMBEGA1UECBMKU29tZS1TdGF0ZTEhMB8GA1UEChMYSW50ZXJuZXQgV2lkZ2l0
+	cyBQdHkgTHRkMB4XDTEzMDEyODE0NDAzOFoXDTE0MDEyODE0NDAzOFowRTELMAkG
+	A1UEBhMCQVUxEzARBgNVBAgTClNvbWUtU3RhdGUxITAfBgNVBAoTGEludGVybmV0
+	IFdpZGdpdHMgUHR5IEx0ZDCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA60fO
+	lDviuIgocgN0LcuphxDM1b6TaYdExAqZ0usBC5AAkxNvBPjjdXIFeYq4xrvYnaB3
+	3u38NyLgxBsoPACxb7Xu3sYmTHiKzDF20cuk2ISQEvm7EHUfAeuoi0kfbTuXww0o
+	rcfcVI0P4YZOH2YLaUgZitOfJgZ8YaHN0+b3RnECAwEAATANBgkqhkiG9w0BAQUF
+	AAOBgQB+mNV3FVb8BsYWe2ibgb2BtU40JoGFupcXM9TKgtN1r+2++6aw7PEEkm4n
+	/wduFssVhUCz0YhTK5zqyPMbmGRr7bL2NPLdT11e89eN319iAnTxW5KuGlqlD6yO
+	9JtKhI2e3MaGYAzTCj1roltRM7mWai19/datDziS5pqEMTPN2w==
+	-----END CERTIFICATE-----
+	subject=/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd
+	issuer=/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd
+	---
+	No client certificate CA names sent
+	---
+	SSL handshake has read 686 bytes and written 328 bytes
+	---
+	New, TLSv1/SSLv3, Cipher is AES256-SHA
+	Server public key is 1024 bit
+	Secure Renegotiation IS supported
+	Compression: NONE
+	Expansion: NONE
+	SSL-Session:
+	    Protocol  : TLSv1
+	    Cipher    : AES256-SHA
+	    Session-ID: D94CCF80BBF632E4F3E5E2FF7C71C434A29BFB8F670989AFAC9DEA4DBE1DCF96
+	    Session-ID-ctx: 
+	    Master-Key: F7E9BF8F559675A305989B64C69F889944537B4CB9BA05869F1E5A5D8D10807CBBD7338E93327E54538C3C958F886C53
+	    Key-Arg   : None
+	    Start Time: 1359402510
+	    Timeout   : 300 (sec)
+	    Verify return code: 18 (self signed certificate)
+	---
+	
+Success. The last line: `Verify return code: 18 (self signed certificate)` indicates you are using a certificate authority you've generated yourself. 
